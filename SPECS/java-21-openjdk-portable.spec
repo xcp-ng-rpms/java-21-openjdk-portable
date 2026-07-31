@@ -1,3 +1,12 @@
+# XCP-ng: Adaptation
+%if "%{?dist}" == ".xcpng8.3"
+%if ! 0%{?xcpng:1}
+%define xcpng 8
+%endif
+# XCP-ng sub release number
+%global xcpng_subrel .1
+%endif
+
 %if (0%{?rhel} > 0 && 0%{?rhel} < 8)
 # portable jdk 17 specific bug, _jvmdir being missing
 %define _jvmdir /usr/lib/jvm
@@ -31,8 +40,14 @@
 %bcond_without staticlibs
 # Remove build artifacts by default
 %bcond_with artifacts
+
+%if 0%{?xcpng}
+%bcond_with fresh_libjvm # Disabled for XCP-ng
+%else
 # Build a fresh libjvm.so for use in a copy of the bootstrap JDK
 %bcond_without fresh_libjvm
+%endif
+
 # Build with system libraries
 %bcond_with system_libs
 
@@ -245,8 +260,11 @@
 %global hotspot_target hotspot
 
 # DTS toolset to use to provide gcc & binutils
+%if 0%{?xcpng}
+%global dtsversion 11
+%else
 %global dtsversion 10
-
+%endif
 # Disable LTO as this causes build failures at the moment.
 # See RHBZ#1861401
 %define _lto_cflags %{nil}
@@ -353,7 +371,9 @@
   %global lts_designator_zip ""
 %endif
 # JDK to use for bootstrapping
+%if !0%{?bootjdk:1}
 %global bootjdk /usr/lib/jvm/java-%{buildjdkver}-openjdk
+%endif
 # Define whether to use the bootstrap JDK directly or with a fresh libjvm.so
 # This will only work where the bootstrap JDK is the same major version
 # as the JDK being built
@@ -566,7 +586,7 @@ ExcludeArch: %{ix86}
 
 Name:    java-%{javaver}-%{origin}-portable%{?pkgos:-%{pkgos}}
 Version: %{newjavaver}.%{buildver}
-Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
+Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?xcpng_subrel}%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
 # and this change was brought into RHEL-4. java-1.5.0-ibm packages
 # also included the epoch in their virtual provides. This created a
@@ -713,12 +733,14 @@ BuildRequires: automake
 BuildRequires: alsa-lib-devel
 BuildRequires: binutils
 BuildRequires: cups-devel
+%if 0%{?xcpng}
 BuildRequires: desktop-file-utils
+%endif
 # elfutils only are OK for build without AOT
 BuildRequires: elfutils-devel
 BuildRequires: file
 BuildRequires: fontconfig-devel
-%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+%if 0%{?xcpng} || (0%{?rhel} > 0 && 0%{?rhel} < 8)
 BuildRequires: devtoolset-%{dtsversion}-gcc
 BuildRequires: devtoolset-%{dtsversion}-gcc-c++
 %else
@@ -727,7 +749,7 @@ BuildRequires: gcc
 %endif
 BuildRequires: gcc-c++
 BuildRequires: gdb
-%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+%if 0%{!?xcpng:1} && (0%{?rhel} > 0 && 0%{?rhel} < 8)
 # rhel7 only, portables only. Rhel8 have gtk3, rpms have runtime recommends of gtk
 BuildRequires: gtk2-devel
 %endif
@@ -745,14 +767,18 @@ BuildRequires: nss-devel
 # N/A for portable. RHEL7 doesn't provide them
 #BuildRequires: crypto-policies
 BuildRequires: pkgconfig
+%if ! 0%{?xcpng}
 BuildRequires: xorg-x11-proto-devel
+%endif
 BuildRequires: zip
 # to pack portable tarballs
 BuildRequires: tar
 BuildRequires: unzip
 %if (0%{?rhel} > 0 && 0%{?rhel} < 8)
 BuildRequires: javapackages-tools
+%if "%{bootjdk}" == "/usr/lib/jvm/java-%{buildjdkver}-openjdk"
 BuildRequires: java-%{buildjdkver}-%{origin}%{?pkgos:-%{pkgos}}-devel
+%endif
 %else
 BuildRequires: javapackages-filesystem
 BuildRequires: java-%{buildjdkver}-openjdk-devel
@@ -761,15 +787,19 @@ BuildRequires: java-%{buildjdkver}-openjdk-devel
 %ifarch %{zero_arches}
 BuildRequires: libffi-devel
 %endif
+%if 0%{!?xcpng:1}
 # Full documentation build requirements
 BuildRequires: graphviz
 BuildRequires: pandoc
+%endif
 # 2023c required as of JDK-8305113
 BuildRequires: tzdata-java >= 2023c
 # cacerts build requirement in portable mode
 BuildRequires: ca-certificates
 # Earlier versions have a bug in tree vectorization on PPC
+%if 0%{!?dtsversion:1}
 BuildRequires: gcc >= 4.8.3-8
+%endif
 
 %if %{with_systemtap}
 BuildRequires: systemtap-sdt-devel
@@ -1107,7 +1137,7 @@ function buildjdk() {
     # rather than ${link_opt} as the system versions
     # are always used in a system_libs build, even
     # for the static library build
-%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+%if 0%{?xcpng} || (0%{?rhel} > 0 && 0%{?rhel} < 8)
     scl enable devtoolset-%{dtsversion} -- bash ${top_dir_abs_src_path}/configure \
 %else
     bash ${top_dir_abs_src_path}/configure \
@@ -1151,7 +1181,7 @@ function buildjdk() {
     --disable-warnings-as-errors
 
     cat spec.gmk
-%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+%if 0%{?xcpng} || (0%{?rhel} > 0 && 0%{?rhel} < 8)
     scl enable devtoolset-%{dtsversion} -- make \
 %else
     make \
@@ -1781,6 +1811,9 @@ done
 %endif
 
 %changelog
+* Mon Aug 03 2026 Philippe Coval <philippe.coval@vates.tech> - 1:21.0.4.0.9-1.1
+- Ported to XCP-ng-8.3 (using devtoolset 11)
+
 * Fri Jul 19 2024 Jiri Vanek <jvanek@redhat.com> - 1:21.0.4.0.9-1
 - upadted to 21.0.4+7
 
@@ -1990,4 +2023,3 @@ done
 
 * Thu Dec 01 2022 Petra Alice Mikova <pmikova@redhat.com> - 1:19.0.1.0.10-2.rolling
 - initial import
-
