@@ -116,7 +116,7 @@ index 00000000000..f48fc7f7e80
 +  AC_SUBST(NSS_LIBDIR)
 +])
 diff --git a/make/autoconf/libraries.m4 b/make/autoconf/libraries.m4
-index a1fc81564b1..ebad69d9dcf 100644
+index 51d4f724c33..feb0bcf3e75 100644
 --- a/make/autoconf/libraries.m4
 +++ b/make/autoconf/libraries.m4
 @@ -35,6 +35,7 @@ m4_include([lib-std.m4])
@@ -127,7 +127,7 @@ index a1fc81564b1..ebad69d9dcf 100644
  
  ################################################################################
  # Determine which libraries are needed for this configuration
-@@ -134,6 +135,7 @@ AC_DEFUN_ONCE([LIB_SETUP_LIBRARIES],
+@@ -128,6 +129,7 @@ AC_DEFUN_ONCE([LIB_SETUP_LIBRARIES],
    LIB_SETUP_X11
  
    LIB_TESTS_SETUP_GTEST
@@ -136,10 +136,10 @@ index a1fc81564b1..ebad69d9dcf 100644
    BASIC_JDKLIB_LIBS=""
    BASIC_JDKLIB_LIBS_TARGET=""
 diff --git a/make/autoconf/spec.gmk.in b/make/autoconf/spec.gmk.in
-index 0f85917814e..9419562b654 100644
+index f6def153c82..4d7abc33427 100644
 --- a/make/autoconf/spec.gmk.in
 +++ b/make/autoconf/spec.gmk.in
-@@ -867,6 +867,11 @@ INSTALL_SYSCONFDIR=@sysconfdir@
+@@ -873,6 +873,11 @@ INSTALL_SYSCONFDIR=@sysconfdir@
  # Libraries
  #
  
@@ -2959,7 +2959,7 @@ index 00000000000..f8d505ca815
 +}
 \ No newline at end of file
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11Key.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11Key.java
-index 6b26297b1b4..7ee5e07756c 100644
+index c3b412885a6..0e7ce73b158 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11Key.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11Key.java
 @@ -37,6 +37,8 @@ import javax.crypto.*;
@@ -2981,20 +2981,21 @@ index 6b26297b1b4..7ee5e07756c 100644
      private static final String PUBLIC = "public";
      private static final String PRIVATE = "private";
      private static final String SECRET = "secret";
-@@ -401,8 +406,10 @@ abstract class P11Key implements Key, Length {
+@@ -401,9 +406,10 @@ abstract class P11Key implements Key, Length {
                      new CK_ATTRIBUTE(CKA_EXTRACTABLE),
          });
  
--        boolean keySensitive = (attrs[0].getBoolean() ||
--                attrs[1].getBoolean() || !attrs[2].getBoolean());
+-        boolean keySensitive =
+-                (attrs[0].getBoolean() && P11Util.isNSS(session.token)) ||
+-                attrs[1].getBoolean() || !attrs[2].getBoolean();
 +        boolean exportable = plainKeySupportEnabled && !algorithm.equals("DH");
 +        boolean keySensitive = (!exportable &&
-+            (attrs[0].getBoolean() ||
-+             attrs[1].getBoolean() || !attrs[2].getBoolean()));
++               ((attrs[0].getBoolean() && P11Util.isNSS(session.token)) ||
++                attrs[1].getBoolean() || !attrs[2].getBoolean()));
  
          return switch (algorithm) {
              case "RSA" -> P11RSAPrivateKeyInternal.of(session, keyID, algorithm,
-@@ -454,7 +461,8 @@ abstract class P11Key implements Key, Length {
+@@ -455,7 +461,8 @@ abstract class P11Key implements Key, Length {
  
          public String getFormat() {
              token.ensureValid();
@@ -3004,7 +3005,7 @@ index 6b26297b1b4..7ee5e07756c 100644
                  return null;
              } else {
                  return "RAW";
-@@ -1624,4 +1632,3 @@ final class SessionKeyRef extends PhantomReference<P11Key> {
+@@ -1625,4 +1632,3 @@ final class SessionKeyRef extends PhantomReference<P11Key> {
          this.clear();
      }
  }
@@ -3204,7 +3205,7 @@ index 5cd6828d293..bae49c4e8a9 100644
                  debug.println("logout succeeded");
              }
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java
-index 3378409ca1c..7602a92a252 100644
+index a6f5f0a8764..9a07c96ca4e 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java
 @@ -33,6 +33,7 @@ import java.lang.ref.*;
